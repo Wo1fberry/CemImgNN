@@ -1,0 +1,99 @@
+%This is to train class NN on datasets;
+%%%%can change Train/Vali/Test ratio, Hidden layer structure, hyperparameters
+
+
+clc
+clear
+close all
+
+
+%%%%change file name here
+
+
+
+digitDatasetPath= 'Class_200Resize0_15Binary_Datasets';
+
+
+imds = imageDatastore(digitDatasetPath, ...
+    'IncludeSubfolders',true, ...
+    'LabelSource','foldernames');
+
+
+%%
+%%%%can change T/V/T ratio here
+[imdsTV,imdsTest]=splitEachLabel(imds,0.8,'randomized'); %set the (train+vali):test ratio   ,'randomized'
+imdsTVrand=shuffle(imdsTV);
+[imdsTrain,imdsVali]=splitEachLabel(imdsTVrand,0.9,'randomized'); %set the train:vali ratio  ,'randomized'
+
+
+labelCount = countEachLabel(imdsTrain)
+% imageAugmenter = imageDataAugmenter('RandRotation',[0,360]);
+% imageSize=[300 300 1];
+% augimdsTrain=augmentedImageDatastore(imageSize,imdsTrain,'DataAugmentation',imageAugmenter);
+% augimdsVali=augmentedImageDatastore(imageSize,imdsVali,'DataAugmentation',imageAugmenter);
+
+%%
+imageLayer = imageInputLayer([200,200,1]);
+
+%%%%can change NN structure
+%V1
+HLayers = [ ...
+    convolution2dLayer(3,8), ...%198
+    batchNormalizationLayer,...
+    reluLayer, ...
+    averagePooling2dLayer(2,'Stride',2),...%99
+    convolution2dLayer(3,16), ...%97
+    batchNormalizationLayer,...
+    reluLayer, ...
+    averagePooling2dLayer(2,'Stride',2),...%49
+    convolution2dLayer(3,16), ...%47
+    batchNormalizationLayer,...
+    reluLayer, ...
+    averagePooling2dLayer(2,'Stride',2),...%24
+    convolution2dLayer(3,16), ...%22
+    batchNormalizationLayer,...
+    reluLayer, ...
+    averagePooling2dLayer(2,'Stride',2),...%11
+    dropoutLayer(0.6),...
+    fullyConnectedLayer(10),...
+    fullyConnectedLayer(6),...
+    softmaxLayer,...
+    classificationLayer];    
+
+layers = [imageLayer,HLayers];
+
+
+%%%%can change hyperparameters below
+miniBatchSize  = 256;
+validationFrequency=60;
+options = trainingOptions('sgdm', ...
+    'MiniBatchSize',miniBatchSize, ...
+    'InitialLearnRate',0.1, ...
+    'LearnRateSchedule','piecewise', ...
+    'LearnRateDropFactor',0.1, ...
+    'LearnRateDropPeriod',40, ...
+    'MaxEpochs',120, ...
+    'Shuffle','never', ...
+    'ValidationData',imdsVali, ...
+    'ValidationFrequency',validationFrequency, ...
+    'ValidationPatience',50,...
+    'Verbose',false, ...
+    'Plots','training-progress',...
+    'ExecutionEnvironment','multi-gpu');
+
+
+net = trainNetwork(imdsTrain,layers,options);
+
+
+% %%
+% %%%%change Net name here
+% NN_res015_tvt89R=net;
+% cd NN_results;
+% save NN_res015_tvt89R
+% cd ..;
+
+%%
+YPred = classify(net,imdsTest);
+YTest = imdsTest.Labels;
+
+accuracy = sum(YPred == YTest)/numel(YTest)
